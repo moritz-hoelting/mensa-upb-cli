@@ -13,7 +13,7 @@ async fn main() {
                 .map(|days_ahead| (Utc::now() + Days::new(days_ahead)).date_naive()),
         )
         .await;
-        let table = menu_table(&menu, cli.price_level, mensen.len() > 1);
+        let table = menu_table(&menu, cli.price_level, mensen.len() > 1, cli.extras);
         println!("{}", table);
     }
 }
@@ -30,4 +30,7 @@ struct Cli {
     /// Nächsten Tage anzeigen
     #[arg(short, long)]
     days_ahead: Option<u64>,
+    /// Nach Extras filtern
+    #[arg(short, long)]
+    extras: Vec<String>,
 }

@@ -3,10 +3,15 @@ use itertools::Itertools;
 
 use crate::{cli_args::PriceLevel, DailyMenu, Dish, Mensa};
 
-pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mensa: bool) -> Table {
-    let main_dishes = get_dishes(menu, DailyMenu::get_main_dishes);
-    let side_dishes = get_dishes(menu, DailyMenu::get_side_dishes);
-    let desserts = get_dishes(menu, DailyMenu::get_desserts);
+pub fn menu_table(
+    menu: &[DailyMenu],
+    price_level: Option<PriceLevel>,
+    show_mensa: bool,
+    extras: Vec<String>,
+) -> Table {
+    let main_dishes = get_dishes(menu, DailyMenu::get_main_dishes, &extras);
+    let side_dishes = get_dishes(menu, DailyMenu::get_side_dishes, &extras);
+    let desserts = get_dishes(menu, DailyMenu::get_desserts, &extras);
 
     let mut col_span = if price_level.is_some() { 3 } else { 5 };
     if show_mensa {
@@ -50,12 +55,7 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
         table.add_row(hauptgerichte_row);
     }
     for dish in main_dishes {
-        table.add_row(into_filtered_price_row(
-            dish.1,
-            &dish.0,
-            price_level,
-            show_mensa,
-        ));
+        table.add_row(into_row(dish.1, &dish.0, price_level, show_mensa));
     }
     {
         let mut beilagen_row = Row::new();
@@ -75,12 +75,7 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
         table.add_row(beilagen_row);
     }
     for dish in side_dishes {
-        table.add_row(into_filtered_price_row(
-            dish.1,
-            &dish.0,
-            price_level,
-            show_mensa,
-        ));
+        table.add_row(into_row(dish.1, &dish.0, price_level, show_mensa));
     }
     {
         let mut desserts_row = Row::new();
@@ -100,18 +95,13 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
         table.add_row(desserts_row);
     }
     for dish in desserts {
-        table.add_row(into_filtered_price_row(
-            dish.1,
-            &dish.0,
-            price_level,
-            show_mensa,
-        ));
+        table.add_row(into_row(dish.1, &dish.0, price_level, show_mensa));
     }
 
     table
 }
 
-fn into_filtered_price_row(
+fn into_row(
     dish: &Dish,
     mensa: &[&Mensa],
     price_level: Option<PriceLevel>,
@@ -145,15 +135,19 @@ fn into_filtered_price_row(
     if show_mensa {
         row.add_cell(
             Cell::from(mensa.iter().map(|m| m.to_string()).join(", "))
-                .set_alignment(CellAlignment::Left),
+                .set_alignment(CellAlignment::Right),
         );
     }
-    row.add_cell(Cell::from(dish.get_extras().join(", ")).set_alignment(CellAlignment::Left));
+    row.add_cell(Cell::from(dish.get_extras().join(", ")).set_alignment(CellAlignment::Right));
 
     row
 }
 
-fn get_dishes<F>(menu: &[DailyMenu], get: F) -> Vec<(Vec<&Mensa>, &Dish)>
+fn get_dishes<'a, F>(
+    menu: &'a [DailyMenu],
+    get: F,
+    extras: &[String],
+) -> Vec<(Vec<&'a Mensa>, &'a Dish)>
 where
     F: Fn(&DailyMenu) -> &[Dish],
 {
@@ -162,14 +156,20 @@ where
             let mensa = m.get_mensa();
             get(m).iter().map(move |d| (mensa, d)).collect::<Vec<_>>()
         })
-        .sorted_by_key(|d| d.1.get_name())
-        .group_by(|d| d.1)
+        .sorted_by_key(|(_, dish)| dish.get_name())
+        .group_by(|(_, dish)| *dish)
         .into_iter()
         .map(|(dish, g)| {
             (
                 g.into_iter().map(|(mensa, _)| mensa).collect::<Vec<_>>(),
                 dish,
             )
+        })
+        .filter(|(_, dish)| {
+            extras.is_empty()
+                || extras
+                    .iter()
+                    .all(|extra| dish.get_extras().iter().any(|e| e.contains(extra)))
         })
         .collect::<Vec<_>>()
 }
