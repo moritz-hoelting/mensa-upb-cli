@@ -1,4 +1,6 @@
+use chrono::NaiveDate;
 use clap::ValueEnum;
+use const_format::concatcp;
 
 use crate::{DailyMenu, Dish};
 
@@ -14,22 +16,24 @@ pub enum Mensa {
     Atrium,
 }
 
+const POST_URL_BASE: &str = "https://www.studierendenwerk-pb.de/gastronomie/speiseplaene/";
+
 impl Mensa {
     pub fn get_url(&self) -> &str {
         match self {
-            Self::Forum => "https://www.studierendenwerk-pb.de/gastronomie/speiseplaene/forum/",
-            Self::Academica => "https://www.studierendenwerk-pb.de/gastronomie/speiseplaene/mensa-academica/",
-            Self::Picknick => "https://www.studierendenwerk-pb.de/gastronomie/speiseplaene/picknick/",
-            Self::BonaVista => "https://www.studierendenwerk-pb.de/gastronomie/speiseplaene/bona-vista/",
-            Self::GrillCafe => "https://www.studierendenwerk-pb.de/gastronomie/speiseplaene/grillcafe/",
-            Self::ZM2 => "https://www.studierendenwerk-pb.de/gastronomie/speiseplaene/mensa-zm2/",
-            Self::Basilica => "https://www.studierendenwerk-pb.de/gastronomie/speiseplaene/mensa-basilica-hamm/",
-            Self::Atrium => "https://www.studierendenwerk-pb.de/gastronomie/speiseplaene/mensa-atrium-lippstadt/",
+            Self::Forum => concatcp!(POST_URL_BASE, "forum/"),
+            Self::Academica => concatcp!(POST_URL_BASE, "mensa-academica/"),
+            Self::Picknick => concatcp!(POST_URL_BASE, "picknick/"),
+            Self::BonaVista => concatcp!(POST_URL_BASE, "bona-vista/"),
+            Self::GrillCafe => concatcp!(POST_URL_BASE, "grillcafe/"),
+            Self::ZM2 => concatcp!(POST_URL_BASE, "mensa-zm2/"),
+            Self::Basilica => concatcp!(POST_URL_BASE, "mensa-basilica-hamm/"),
+            Self::Atrium => concatcp!(POST_URL_BASE, "mensa-atrium-lippstadt/"),
         }
     }
 
-    pub async fn get_menu(&self) -> Result<DailyMenu, reqwest::Error> {
-        let (main_dishes, side_dishes, desserts) = scrape_menu(self.get_url()).await?;
+    pub async fn get_menu(&self, day: Option<NaiveDate>) -> Result<DailyMenu, reqwest::Error> {
+        let (main_dishes, side_dishes, desserts) = scrape_menu(self.get_url(), day).await?;
         Ok(DailyMenu::new(*self, main_dishes, side_dishes, desserts))
     }
 }
@@ -50,8 +54,17 @@ impl ToString for Mensa {
     }
 }
 
-async fn scrape_menu(url: &str) -> Result<(Vec<Dish>, Vec<Dish>, Vec<Dish>), reqwest::Error> {
-    let response = reqwest::get(url).await?;
+async fn scrape_menu(
+    url: &str,
+    day: Option<NaiveDate>,
+) -> Result<(Vec<Dish>, Vec<Dish>, Vec<Dish>), reqwest::Error> {
+    let client = reqwest::Client::new();
+    let mut request_builder = client.post(url);
+    if let Some(day) = day {
+        request_builder = request_builder
+            .query(&[("tx_pamensa_mensa[date]", day.format("%Y-%m-%d").to_string())]);
+    }
+    let response = request_builder.send().await?;
     let html_content = response.text().await?;
 
     let document = scraper::Html::parse_document(&html_content);

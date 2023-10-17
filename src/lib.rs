@@ -3,6 +3,7 @@ mod daily_menu;
 mod dish;
 mod mensa;
 mod menu_table;
+pub mod util;
 
 pub use daily_menu::DailyMenu;
 pub use dish::Dish;

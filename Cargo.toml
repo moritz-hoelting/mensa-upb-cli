@@ -7,7 +7,9 @@ authors = ["Moritz Hölting"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+chrono = "0.4.31"
 clap = { version = "4.4.6", features = ["derive"] }
+const_format = "0.2.32"
 futures = "0.3.28"
 itertools = "0.11.0"
 reqwest = "0.11.22"

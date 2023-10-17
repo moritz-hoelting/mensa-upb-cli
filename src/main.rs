@@ -1,18 +1,19 @@
+use chrono::{Days, Utc};
 use clap::Parser;
-use futures::future::join_all;
-use mensa_upb_cli::{cli_args::PriceLevel, menu_table, Mensa};
+use mensa_upb_cli::{cli_args::PriceLevel, menu_table, util::all_menus, Mensa};
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
     if !cli.mensa.is_empty() {
-        let mensa = cli.mensa;
-        let menu = join_all(mensa.iter().map(|m| m.get_menu()))
-            .await
-            .into_iter()
-            .filter_map(|menu| menu.ok())
-            .collect::<Vec<_>>();
-        let table = menu_table(&menu, cli.price_level, mensa.len() > 1);
+        let mensen = cli.mensa;
+        let menu = all_menus(
+            &mensen,
+            cli.days_ahead
+                .map(|days_ahead| (Utc::now() + Days::new(days_ahead)).date_naive()),
+        )
+        .await;
+        let table = menu_table(&menu, cli.price_level, mensen.len() > 1);
         println!("{}", table);
     }
 }
@@ -26,4 +27,7 @@ struct Cli {
     /// Preisstufe auswählen
     #[arg(short, long)]
     price_level: Option<PriceLevel>,
+    /// Nächsten Tage anzeigen
+    #[arg(short, long)]
+    days_ahead: Option<u64>,
 }
