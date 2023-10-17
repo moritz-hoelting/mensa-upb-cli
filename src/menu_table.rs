@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use term_data_table::{Alignment, Cell, Row, Table, TableStyle};
 
 use crate::{cli_args::PriceLevel, DailyMenu, Dish, Mensa};
@@ -12,6 +13,15 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
                 .map(move |d| (mensa, d))
                 .collect::<Vec<_>>()
         })
+        .sorted_by_key(|d| d.1.get_name())
+        .group_by(|d| d.1)
+        .into_iter()
+        .map(|(dish, g)| {
+            (
+                g.into_iter().map(|(mensa, _)| mensa).collect::<Vec<_>>(),
+                dish,
+            )
+        })
         .collect::<Vec<_>>();
     let side_dishes = menu
         .iter()
@@ -22,6 +32,15 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
                 .map(move |d| (mensa, d))
                 .collect::<Vec<_>>()
         })
+        .sorted_by_key(|d| d.1.get_name())
+        .group_by(|d| d.1)
+        .into_iter()
+        .map(|(dish, g)| {
+            (
+                g.into_iter().map(|(mensa, _)| mensa).collect::<Vec<_>>(),
+                dish,
+            )
+        })
         .collect::<Vec<_>>();
     let desserts = menu
         .iter()
@@ -31,6 +50,15 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
                 .iter()
                 .map(move |d| (mensa, d))
                 .collect::<Vec<_>>()
+        })
+        .sorted_by_key(|d| d.1.get_name())
+        .group_by(|d| d.1)
+        .into_iter()
+        .map(|(dish, g)| {
+            (
+                g.into_iter().map(|(mensa, _)| mensa).collect::<Vec<_>>(),
+                dish,
+            )
         })
         .collect::<Vec<_>>();
 
@@ -65,7 +93,7 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
     for dish in main_dishes {
         table.add_row(into_filtered_price_row(
             dish.1,
-            dish.0,
+            &dish.0,
             price_level,
             show_mensa,
         ));
@@ -80,7 +108,7 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
     for dish in side_dishes {
         table.add_row(into_filtered_price_row(
             dish.1,
-            dish.0,
+            &dish.0,
             price_level,
             show_mensa,
         ));
@@ -95,7 +123,7 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
     for dish in desserts {
         table.add_row(into_filtered_price_row(
             dish.1,
-            dish.0,
+            &dish.0,
             price_level,
             show_mensa,
         ));
@@ -106,7 +134,7 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
 
 fn into_filtered_price_row<'a>(
     dish: &'a Dish,
-    mensa: &'a Mensa,
+    mensa: &[&'a Mensa],
     price_level: Option<PriceLevel>,
     show_mensa: bool,
 ) -> Row<'a> {
@@ -135,7 +163,10 @@ fn into_filtered_price_row<'a>(
         );
     }
     if show_mensa {
-        row.add_cell(Cell::from(mensa.to_string()).with_alignment(Alignment::Left));
+        row.add_cell(
+            Cell::from(mensa.iter().map(|m| m.to_string()).join(", "))
+                .with_alignment(Alignment::Left),
+        );
     }
     row.add_cell(Cell::from(dish.get_extras().join(", ")).with_alignment(Alignment::Left));
 

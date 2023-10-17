@@ -7,7 +7,6 @@ async fn main() {
     let cli = Cli::parse();
     if !cli.mensa.is_empty() {
         let mensa = cli.mensa;
-        dbg!(&mensa);
         let menu = join_all(mensa.iter().map(|m| m.get_menu()))
             .await
             .into_iter()

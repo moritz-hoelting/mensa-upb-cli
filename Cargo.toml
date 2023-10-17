@@ -9,6 +9,7 @@ authors = ["Moritz Hölting"]
 [dependencies]
 clap = { version = "4.4.6", features = ["derive"] }
 futures = "0.3.28"
+itertools = "0.11.0"
 reqwest = "0.11.22"
 scraper = "0.17.1"
 term-data-table = "0.2.3"
