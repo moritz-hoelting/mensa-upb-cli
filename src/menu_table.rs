@@ -1,5 +1,5 @@
+use comfy_table::{Cell, CellAlignment, Row, Table};
 use itertools::Itertools;
-use term_data_table::{Alignment, Cell, Row, Table, TableStyle};
 
 use crate::{cli_args::PriceLevel, DailyMenu, Dish, Mensa};
 
@@ -12,30 +12,43 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
     if show_mensa {
         col_span += 1;
     }
-    let mut header = Row::new().with_cell(Cell::from("Gericht"));
+    let mut header = vec!["Gericht"];
     if price_level.is_some() {
-        header.add_cell(Cell::from("Preis"));
+        header.push("Preis");
     } else {
-        header
-            .add_cell(Cell::from("Preis Studierende"))
-            .add_cell(Cell::from("Preis Bedienstete"))
-            .add_cell(Cell::from("Preis Gäste"));
+        header.extend(vec![
+            "Preis Studierende",
+            "Preis Bedienstete",
+            "Preis Gäste",
+        ]);
     };
     if show_mensa {
-        header.add_cell(Cell::from("Mensa"));
+        header.push("Mensa");
     }
-    header.add_cell(Cell::from("Extras"));
+    header.push("Extras");
 
-    let mut table = Table::new()
-        .with_style(TableStyle::THIN)
-        .with_row(header)
-        .with_row(
-            Row::new().with_cell(
-                Cell::from("Hauptgerichte")
-                    .with_alignment(Alignment::Center)
-                    .with_col_span(col_span),
-            ),
+    let mut table = Table::new();
+    table
+        .load_preset(comfy_table::presets::UTF8_FULL_CONDENSED)
+        .set_header(Row::from(header))
+        .set_content_arrangement(comfy_table::ContentArrangement::DynamicFullWidth);
+    {
+        let mut hauptgerichte_row = Row::new();
+        hauptgerichte_row.add_cell(
+            Cell::from("Hauptgerichte")
+                .set_alignment(CellAlignment::Center)
+                .add_attribute(comfy_table::Attribute::Underlined)
+                .add_attribute(comfy_table::Attribute::OverLined),
         );
+        for _ in 0..col_span - 1 {
+            hauptgerichte_row.add_cell(
+                Cell::new("")
+                    .add_attribute(comfy_table::Attribute::Underlined)
+                    .add_attribute(comfy_table::Attribute::OverLined),
+            );
+        }
+        table.add_row(hauptgerichte_row);
+    }
     for dish in main_dishes {
         table.add_row(into_filtered_price_row(
             dish.1,
@@ -44,13 +57,23 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
             show_mensa,
         ));
     }
-    table.add_row(
-        Row::new().with_cell(
+    {
+        let mut beilagen_row = Row::new();
+        beilagen_row.add_cell(
             Cell::from("Beilagen")
-                .with_alignment(Alignment::Center)
-                .with_col_span(col_span),
-        ),
-    );
+                .set_alignment(CellAlignment::Center)
+                .add_attribute(comfy_table::Attribute::Underlined)
+                .add_attribute(comfy_table::Attribute::OverLined),
+        );
+        for _ in 0..col_span - 1 {
+            beilagen_row.add_cell(
+                Cell::new("")
+                    .add_attribute(comfy_table::Attribute::Underlined)
+                    .add_attribute(comfy_table::Attribute::OverLined),
+            );
+        }
+        table.add_row(beilagen_row);
+    }
     for dish in side_dishes {
         table.add_row(into_filtered_price_row(
             dish.1,
@@ -59,13 +82,23 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
             show_mensa,
         ));
     }
-    table.add_row(
-        Row::new().with_cell(
+    {
+        let mut desserts_row = Row::new();
+        desserts_row.add_cell(
             Cell::from("Desserts")
-                .with_alignment(Alignment::Center)
-                .with_col_span(col_span),
-        ),
-    );
+                .set_alignment(CellAlignment::Center)
+                .add_attribute(comfy_table::Attribute::Underlined)
+                .add_attribute(comfy_table::Attribute::OverLined),
+        );
+        for _ in 0..col_span - 1 {
+            desserts_row.add_cell(
+                Cell::new("")
+                    .add_attribute(comfy_table::Attribute::Underlined)
+                    .add_attribute(comfy_table::Attribute::OverLined),
+            );
+        }
+        table.add_row(desserts_row);
+    }
     for dish in desserts {
         table.add_row(into_filtered_price_row(
             dish.1,
@@ -78,13 +111,14 @@ pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mens
     table
 }
 
-fn into_filtered_price_row<'a>(
-    dish: &'a Dish,
-    mensa: &[&'a Mensa],
+fn into_filtered_price_row(
+    dish: &Dish,
+    mensa: &[&Mensa],
     price_level: Option<PriceLevel>,
     show_mensa: bool,
-) -> Row<'a> {
-    let mut row = Row::new().with_cell(Cell::from(dish.get_name()).with_alignment(Alignment::Left));
+) -> Row {
+    let mut row = Row::new();
+    row.add_cell(Cell::from(dish.get_name()).set_alignment(CellAlignment::Left));
 
     if let Some(price_level) = price_level {
         let price = match price_level {
@@ -93,28 +127,28 @@ fn into_filtered_price_row<'a>(
             PriceLevel::Gast => dish.get_price_guests().unwrap_or("-"),
         }
         .to_string();
-        row.add_cell(Cell::from(price).with_alignment(Alignment::Right));
+        row.add_cell(Cell::from(price).set_alignment(CellAlignment::Right));
     } else {
         row.add_cell(
             Cell::from(dish.get_price_students().unwrap_or_default())
-                .with_alignment(Alignment::Right),
+                .set_alignment(CellAlignment::Right),
         )
         .add_cell(
             Cell::from(dish.get_price_employees().unwrap_or_default())
-                .with_alignment(Alignment::Right),
+                .set_alignment(CellAlignment::Right),
         )
         .add_cell(
             Cell::from(dish.get_price_guests().unwrap_or_default())
-                .with_alignment(Alignment::Right),
+                .set_alignment(CellAlignment::Right),
         );
     }
     if show_mensa {
         row.add_cell(
             Cell::from(mensa.iter().map(|m| m.to_string()).join(", "))
-                .with_alignment(Alignment::Left),
+                .set_alignment(CellAlignment::Left),
         );
     }
-    row.add_cell(Cell::from(dish.get_extras().join(", ")).with_alignment(Alignment::Left));
+    row.add_cell(Cell::from(dish.get_extras().join(", ")).set_alignment(CellAlignment::Left));
 
     row
 }

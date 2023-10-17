@@ -1,5 +1,4 @@
 use scraper::ElementRef;
-use term_data_table::{Alignment, Cell, IntoRow, Row};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dish {
@@ -94,34 +93,5 @@ impl TryFrom<ElementRef<'_>> for Dish {
 impl PartialOrd for Dish {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.name.partial_cmp(&other.name)
-    }
-}
-
-impl IntoRow for Dish {
-    fn headers(&self) -> Row {
-        Row::new()
-            .with_cell(Cell::from("Name").with_alignment(Alignment::Left))
-            .with_cell(Cell::from("Preis Studierende").with_alignment(Alignment::Right))
-            .with_cell(Cell::from("Preis Bedienstete").with_alignment(Alignment::Right))
-            .with_cell(Cell::from("Preis Gäste").with_alignment(Alignment::Right))
-            .with_cell(Cell::from("Extras").with_alignment(Alignment::Left))
-    }
-
-    fn into_row(&self) -> Row {
-        Row::new()
-            .with_cell(Cell::from(self.name.clone()).with_alignment(Alignment::Left))
-            .with_cell(
-                Cell::from(self.price_students.as_deref().unwrap_or_default())
-                    .with_alignment(Alignment::Right),
-            )
-            .with_cell(
-                Cell::from(self.price_employees.as_deref().unwrap_or_default())
-                    .with_alignment(Alignment::Right),
-            )
-            .with_cell(
-                Cell::from(self.price_guests.as_deref().unwrap_or_default())
-                    .with_alignment(Alignment::Right),
-            )
-            .with_cell(Cell::from(self.extras.join(", ")).with_alignment(Alignment::Left))
     }
 }
