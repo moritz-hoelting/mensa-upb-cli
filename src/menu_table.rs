@@ -4,63 +4,9 @@ use term_data_table::{Alignment, Cell, Row, Table, TableStyle};
 use crate::{cli_args::PriceLevel, DailyMenu, Dish, Mensa};
 
 pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mensa: bool) -> Table {
-    let main_dishes = menu
-        .iter()
-        .flat_map(|m| {
-            let mensa = m.get_mensa();
-            m.get_main_dishes()
-                .iter()
-                .map(move |d| (mensa, d))
-                .collect::<Vec<_>>()
-        })
-        .sorted_by_key(|d| d.1.get_name())
-        .group_by(|d| d.1)
-        .into_iter()
-        .map(|(dish, g)| {
-            (
-                g.into_iter().map(|(mensa, _)| mensa).collect::<Vec<_>>(),
-                dish,
-            )
-        })
-        .collect::<Vec<_>>();
-    let side_dishes = menu
-        .iter()
-        .flat_map(|m| {
-            let mensa = m.get_mensa();
-            m.get_side_dishes()
-                .iter()
-                .map(move |d| (mensa, d))
-                .collect::<Vec<_>>()
-        })
-        .sorted_by_key(|d| d.1.get_name())
-        .group_by(|d| d.1)
-        .into_iter()
-        .map(|(dish, g)| {
-            (
-                g.into_iter().map(|(mensa, _)| mensa).collect::<Vec<_>>(),
-                dish,
-            )
-        })
-        .collect::<Vec<_>>();
-    let desserts = menu
-        .iter()
-        .flat_map(|m| {
-            let mensa = m.get_mensa();
-            m.get_desserts()
-                .iter()
-                .map(move |d| (mensa, d))
-                .collect::<Vec<_>>()
-        })
-        .sorted_by_key(|d| d.1.get_name())
-        .group_by(|d| d.1)
-        .into_iter()
-        .map(|(dish, g)| {
-            (
-                g.into_iter().map(|(mensa, _)| mensa).collect::<Vec<_>>(),
-                dish,
-            )
-        })
-        .collect::<Vec<_>>();
+    let main_dishes = get_dishes(menu, DailyMenu::get_main_dishes);
+    let side_dishes = get_dishes(menu, DailyMenu::get_side_dishes);
+    let desserts = get_dishes(menu, DailyMenu::get_desserts);
 
     let mut col_span = if price_level.is_some() { 3 } else { 5 };
     if show_mensa {
@@ -171,4 +117,25 @@ fn into_filtered_price_row<'a>(
     row.add_cell(Cell::from(dish.get_extras().join(", ")).with_alignment(Alignment::Left));
 
     row
+}
+
+fn get_dishes<F>(menu: &[DailyMenu], get: F) -> Vec<(Vec<&Mensa>, &Dish)>
+where
+    F: Fn(&DailyMenu) -> &[Dish],
+{
+    menu.iter()
+        .flat_map(|m| {
+            let mensa = m.get_mensa();
+            get(m).iter().map(move |d| (mensa, d)).collect::<Vec<_>>()
+        })
+        .sorted_by_key(|d| d.1.get_name())
+        .group_by(|d| d.1)
+        .into_iter()
+        .map(|(dish, g)| {
+            (
+                g.into_iter().map(|(mensa, _)| mensa).collect::<Vec<_>>(),
+                dish,
+            )
+        })
+        .collect::<Vec<_>>()
 }
