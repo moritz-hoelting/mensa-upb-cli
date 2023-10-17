@@ -21,7 +21,7 @@ async fn main() {
 #[command(author, version, about, long_about = None)]
 struct Cli {
     /// Mensa auswählen
-    #[arg(short, long, default_values_t = vec![Mensa::Forum, Mensa::Academica])]
+    #[arg(short, long, value_enum, default_values_t = [Mensa::Forum, Mensa::Academica])]
     mensa: Vec<Mensa>,
     /// Preisstufe auswählen
     #[arg(short, long)]
