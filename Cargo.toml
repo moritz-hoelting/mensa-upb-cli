@@ -1,5 +1,5 @@
 [package]
-name = "mensa-upb"
+name = "mensa-upb-cli"
 version = "0.1.0"
 edition = "2021"
 authors = ["Moritz Hölting"]

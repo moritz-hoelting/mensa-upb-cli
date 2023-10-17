@@ -1,6 +1,6 @@
 use clap::Parser;
 use futures::future::join_all;
-use mensa_upb::{cli_args::PriceLevel, menu_table, Mensa};
+use mensa_upb_cli::{cli_args::PriceLevel, menu_table, Mensa};
 
 #[tokio::main]
 async fn main() {
