@@ -1,19 +1,42 @@
-use std::{fmt::Display, io};
+use std::{
+    collections::HashMap,
+    fmt::Display,
+    io,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-use chrono::{Datelike, Duration, Utc, Weekday};
+use chrono::{Datelike, Duration as CDuration, Utc, Weekday};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Padding, Paragraph, Tabs},
 };
 use strum::{EnumIter, FromRepr, IntoEnumIterator as _};
+use tokio::sync::{mpsc, RwLock};
 
-use crate::tui;
+use crate::{menu::Menu, tui, Mensa};
 
 #[derive(Debug, Default)]
 pub struct App {
     exit: bool,
     selected_tab: SelectedTab,
+    menus: Arc<RwLock<HashMap<SelectedTab, Menu>>>,
+}
+
+#[derive(Debug, Default)]
+pub struct AppWidget {
+    selected_tab: SelectedTab,
+    menus: HashMap<SelectedTab, Menu>,
+}
+
+impl AppWidget {
+    pub async fn from_app(app: &App) -> Self {
+        Self {
+            selected_tab: app.selected_tab,
+            menus: app.menus.read().await.clone(),
+        }
+    }
 }
 
 #[derive(Default, Clone, Copy, Debug, FromRepr, EnumIter, PartialEq, Eq, Hash)]
@@ -36,10 +59,47 @@ impl Display for SelectedTab {
 
 impl App {
     /// runs the application's main loop until the user quits
-    pub fn run(&mut self, terminal: &mut tui::Tui) -> io::Result<()> {
+    pub async fn run(&mut self, terminal: &mut tui::Tui) -> io::Result<()> {
+        let (tx, mut rx) = mpsc::channel(10);
+
+        for tab in SelectedTab::iter() {
+            let menus = self.menus.clone();
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                menus.write().await.insert(
+                    tab,
+                    Menu::new(
+                        (Utc::now() + CDuration::days(tab as i64)).date_naive(),
+                        &[Mensa::Academica, Mensa::Forum],
+                    )
+                    .await
+                    .unwrap(),
+                );
+                // tokio::time::sleep(Duration::from_millis(500)).await;
+                let _ = tx.send(()).await;
+            });
+        }
+
+        let tick_rate = Duration::from_millis(250);
+        let mut last_tick = Instant::now();
+
         while !self.exit {
-            terminal.draw(|frame| self.render_frame(frame))?;
-            self.handle_events()?;
+            let widget = AppWidget::from_app(self).await;
+            terminal.draw(|frame| widget.render_frame(frame))?;
+
+            let timeout = tick_rate
+                .checked_sub(last_tick.elapsed())
+                .unwrap_or_else(|| Duration::from_secs(0));
+
+            self.handle_events(timeout)?;
+
+            if last_tick.elapsed() >= tick_rate {
+                last_tick = Instant::now();
+            }
+
+            if rx.try_recv().is_ok() {
+                // Handle any completed async tasks
+            }
         }
         Ok(())
     }
@@ -56,17 +116,15 @@ impl App {
         self.selected_tab = self.selected_tab.previous();
     }
 
-    fn render_frame(&self, frame: &mut Frame) {
-        frame.render_widget(self, frame.size());
-    }
-
-    fn handle_events(&mut self) -> io::Result<()> {
-        match event::read()? {
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
+    fn handle_events(&mut self, timeout: Duration) -> io::Result<()> {
+        if event::poll(timeout)? {
+            match event::read()? {
+                Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+                    self.handle_key_event(key_event);
+                }
+                _ => {}
             }
-            _ => {}
-        };
+        }
         Ok(())
     }
 
@@ -96,7 +154,11 @@ impl SelectedTab {
     }
 }
 
-impl App {
+impl AppWidget {
+    fn render_frame(&self, frame: &mut Frame) {
+        frame.render_widget(self, frame.size());
+    }
+
     fn render_tabs(&self, area: Rect, buf: &mut Buffer) {
         let titles = SelectedTab::iter().map(SelectedTab::title);
         let highlight_style = (Color::default(), Color::Green);
@@ -127,13 +189,15 @@ impl App {
             .block(details_block)
             .render(details, buf);
 
-        Paragraph::new("Overview")
+        let text = format!("{:?}", self.menus.get(&tab));
+
+        Paragraph::new(text)
             .block(Block::default().title("Overview").borders(Borders::ALL))
             .render(overview, buf);
     }
 }
 
-impl Widget for &App {
+impl Widget for &AppWidget {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let vertical = Layout::vertical([
             Constraint::Length(1),
@@ -176,7 +240,7 @@ fn get_day_display(offset: i64) -> &'static str {
         0 => "Heute",
         1 => "Morgen",
         _ => {
-            let future_date = Utc::now() + Duration::days(offset);
+            let future_date = Utc::now() + CDuration::days(offset);
             let weekday = future_date.weekday();
 
             match weekday {
