@@ -1,12 +1,17 @@
+use itertools::Itertools;
 use scraper::ElementRef;
+
+use crate::Mensa;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dish {
     name: String,
+    img_src: String,
     price_students: Option<String>,
     price_employees: Option<String>,
     price_guests: Option<String>,
     extras: Vec<String>,
+    mensen: Vec<Mensa>,
 }
 
 impl Dish {
@@ -25,25 +30,44 @@ impl Dish {
     pub fn get_extras(&self) -> &[String] {
         &self.extras
     }
+    pub fn get_mensen(&self) -> &[Mensa] {
+        &self.mensen
+    }
+
+    pub fn same_as(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.price_employees == other.price_employees
+            && self.price_guests == other.price_guests
+            && self.price_students == other.price_students
+            && self.extras.iter().sorted().collect_vec()
+                == self.extras.iter().sorted().collect_vec()
+    }
+
+    pub fn merge(&mut self, other: Self) {
+        self.mensen.extend(other.mensen);
+        self.mensen.sort();
+        self.mensen.dedup();
+    }
 }
 
-impl TryFrom<ElementRef<'_>> for Dish {
-    type Error = ();
-
-    fn try_from(value: ElementRef) -> Result<Self, Self::Error> {
-        let html_name_selector = scraper::Selector::parse("h4").unwrap();
-        let name = value
+impl Dish {
+    pub fn from_element(element: ElementRef, mensa: Mensa) -> Option<Self> {
+        let html_name_selector = scraper::Selector::parse(".desc h4").unwrap();
+        let name = element
             .select(&html_name_selector)
-            .next()
-            .ok_or(())?
+            .next()?
             .text()
             .collect::<Vec<_>>()
             .join("")
             .trim()
             .to_string();
 
-        let html_price_selector = scraper::Selector::parse(".price").unwrap();
-        let mut prices = value
+        let img_selector = scraper::Selector::parse(".img img").unwrap();
+        let img_src_path = element.select(&img_selector).next()?.value().attr("src")?;
+        let img_src = format!("https://www.studierendenwerk-pb.de/{}", img_src_path);
+
+        let html_price_selector = scraper::Selector::parse(".desc .price").unwrap();
+        let mut prices = element
             .select(&html_price_selector)
             .filter_map(|price| {
                 let price_for = price.first_child().and_then(|strong| {
@@ -65,14 +89,15 @@ impl TryFrom<ElementRef<'_>> for Dish {
             })
             .collect::<Vec<_>>();
 
-        let html_extras_selector = scraper::Selector::parse(".buttons > *").unwrap();
-        let extras = value
+        let html_extras_selector = scraper::Selector::parse(".desc .buttons > *").unwrap();
+        let extras = element
             .select(&html_extras_selector)
             .filter_map(|extra| extra.value().attr("title").map(|title| title.to_string()))
             .collect::<Vec<_>>();
 
-        Ok(Self {
+        Some(Self {
             name,
+            img_src,
             price_students: prices
                 .iter_mut()
                 .find(|(price_for, _)| price_for == "Studierende")
@@ -86,6 +111,7 @@ impl TryFrom<ElementRef<'_>> for Dish {
                 .find(|(price_for, _)| price_for == "Gäste")
                 .map(|(_, price)| std::mem::take(price)),
             extras,
+            mensen: vec![mensa],
         })
     }
 }

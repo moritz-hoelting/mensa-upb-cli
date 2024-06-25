@@ -1,10 +1,9 @@
-use chrono::NaiveDate;
+use std::fmt::Display;
+
 use clap::ValueEnum;
 use const_format::concatcp;
 
-use crate::{DailyMenu, Dish};
-
-#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum Mensa {
     Forum,
     Academica,
@@ -32,15 +31,23 @@ impl Mensa {
         }
     }
 
-    pub async fn get_menu(&self, day: Option<NaiveDate>) -> Result<DailyMenu, reqwest::Error> {
-        let (main_dishes, side_dishes, desserts) = scrape_menu(self.get_url(), day).await?;
-        Ok(DailyMenu::new(*self, main_dishes, side_dishes, desserts))
+    pub fn get_char(&self) -> char {
+        match self {
+            Self::Forum => 'F',
+            Self::Academica => 'A',
+            Self::Picknick => 'P',
+            Self::BonaVista => 'B',
+            Self::GrillCafe => 'G',
+            Self::ZM2 => 'Z',
+            Self::Basilica => 'H',
+            Self::Atrium => 'L',
+        }
     }
 }
 
-impl ToString for Mensa {
-    fn to_string(&self) -> String {
-        match self {
+impl Display for Mensa {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
             Self::Forum => "Forum",
             Self::Academica => "Academica",
             Self::Picknick => "Picknick",
@@ -49,52 +56,7 @@ impl ToString for Mensa {
             Self::ZM2 => "ZM2",
             Self::Basilica => "Basilica",
             Self::Atrium => "Atrium",
-        }
-        .to_string()
+        };
+        f.write_str(s)
     }
-}
-
-async fn scrape_menu(
-    url: &str,
-    day: Option<NaiveDate>,
-) -> Result<(Vec<Dish>, Vec<Dish>, Vec<Dish>), reqwest::Error> {
-    let client = reqwest::Client::new();
-    let mut request_builder = client.post(url);
-    if let Some(day) = day {
-        request_builder = request_builder
-            .query(&[("tx_pamensa_mensa[date]", day.format("%Y-%m-%d").to_string())]);
-    }
-    let response = request_builder.send().await?;
-    let html_content = response.text().await?;
-
-    let document = scraper::Html::parse_document(&html_content);
-
-    let html_main_dishes_selector = scraper::Selector::parse(
-        "table.table-dishes.main-dishes > tbody > tr.odd > td.description > div.row > div.desc",
-    )
-    .unwrap();
-    let html_main_dishes = document.select(&html_main_dishes_selector);
-    let main_dishes = html_main_dishes
-        .filter_map(|dish| Dish::try_from(dish).ok())
-        .collect::<Vec<_>>();
-
-    let html_side_dishes_selector = scraper::Selector::parse(
-        "table.table-dishes.side-dishes > tbody > tr.odd > td.description > div.row > div.desc",
-    )
-    .unwrap();
-    let html_side_dishes = document.select(&html_side_dishes_selector);
-    let side_dishes = html_side_dishes
-        .filter_map(|dish| Dish::try_from(dish).ok())
-        .collect::<Vec<_>>();
-
-    let html_desserts_selector = scraper::Selector::parse(
-        "table.table-dishes.soups > tbody > tr.odd > td.description > div.row > div.desc",
-    )
-    .unwrap();
-    let html_desserts = document.select(&html_desserts_selector);
-    let desserts = html_desserts
-        .filter_map(|dish| Dish::try_from(dish).ok())
-        .collect::<Vec<_>>();
-
-    Ok((main_dishes, side_dishes, desserts))
 }

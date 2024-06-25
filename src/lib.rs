@@ -1,11 +1,8 @@
-pub mod cli_args;
-mod daily_menu;
+pub mod app;
 mod dish;
 mod mensa;
-mod menu_table;
-pub mod util;
+pub mod menu;
+pub mod tui;
 
-pub use daily_menu::DailyMenu;
 pub use dish::Dish;
 pub use mensa::Mensa;
-pub use menu_table::menu_table;

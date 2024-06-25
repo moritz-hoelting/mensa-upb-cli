@@ -6,13 +6,23 @@ authors = ["Moritz Hölting"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "mensa-upb"
+path = "src/main.rs"
+
 [dependencies]
 chrono = "0.4.31"
 clap = { version = "4.4.6", features = ["derive"] }
-comfy-table = "7.0.1"
+color-eyre = "0.6.3"
+comfy-table = "7.1.1"
 const_format = "0.2.32"
+crossterm = { version = "0.27.0", features = ["event-stream"] }
 futures = "0.3.28"
-itertools = "0.11.0"
-reqwest = "0.11.22"
-scraper = "0.17.1"
+image = "0.25.1"
+itertools = "0.13.0"
+ratatui = "0.27.0"
+ratatui-image = "1.0.1"
+reqwest = "0.12.5"
+scraper = "0.19.0"
+strum = "0.26.3"
 tokio = { version = "1.33.0", features = ["full"] }
