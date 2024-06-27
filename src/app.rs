@@ -2,7 +2,6 @@ use std::{
     collections::HashMap,
     fmt::Display,
     io,
-    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -13,7 +12,7 @@ use ratatui::{
     widgets::{Block, Borders, Padding, Paragraph, Tabs},
 };
 use strum::{EnumIter, FromRepr, IntoEnumIterator as _};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc;
 
 use crate::{menu::Menu, tui, Mensa};
 
@@ -21,22 +20,7 @@ use crate::{menu::Menu, tui, Mensa};
 pub struct App {
     exit: bool,
     selected_tab: SelectedTab,
-    menus: Arc<RwLock<HashMap<SelectedTab, Menu>>>,
-}
-
-#[derive(Debug, Default)]
-pub struct AppWidget {
-    selected_tab: SelectedTab,
     menus: HashMap<SelectedTab, Menu>,
-}
-
-impl AppWidget {
-    pub async fn from_app(app: &App) -> Self {
-        Self {
-            selected_tab: app.selected_tab,
-            menus: app.menus.read().await.clone(),
-        }
-    }
 }
 
 #[derive(Default, Clone, Copy, Debug, FromRepr, EnumIter, PartialEq, Eq, Hash)]
@@ -63,20 +47,15 @@ impl App {
         let (tx, mut rx) = mpsc::channel(10);
 
         for tab in SelectedTab::iter() {
-            let menus = self.menus.clone();
             let tx = tx.clone();
             tokio::spawn(async move {
-                menus.write().await.insert(
-                    tab,
-                    Menu::new(
-                        (Utc::now() + CDuration::days(tab as i64)).date_naive(),
-                        &[Mensa::Academica, Mensa::Forum],
-                    )
-                    .await
-                    .unwrap(),
-                );
-                // tokio::time::sleep(Duration::from_millis(500)).await;
-                let _ = tx.send(()).await;
+                let menu = Menu::new(
+                    (Utc::now() + CDuration::days(tab as i64)).date_naive(),
+                    &[Mensa::Academica, Mensa::Forum],
+                )
+                .await
+                .unwrap();
+                tx.send((tab, menu)).await.unwrap();
             });
         }
 
@@ -84,8 +63,7 @@ impl App {
         let mut last_tick = Instant::now();
 
         while !self.exit {
-            let widget = AppWidget::from_app(self).await;
-            terminal.draw(|frame| widget.render_frame(frame))?;
+            terminal.draw(|frame| self.render_frame(frame))?;
 
             let timeout = tick_rate
                 .checked_sub(last_tick.elapsed())
@@ -97,8 +75,8 @@ impl App {
                 last_tick = Instant::now();
             }
 
-            if rx.try_recv().is_ok() {
-                // Handle any completed async tasks
+            while let Ok((tab, menu)) = rx.try_recv() {
+                self.menus.insert(tab, menu);
             }
         }
         Ok(())
@@ -154,7 +132,7 @@ impl SelectedTab {
     }
 }
 
-impl AppWidget {
+impl App {
     fn render_frame(&self, frame: &mut Frame) {
         frame.render_widget(self, frame.size());
     }
@@ -197,7 +175,7 @@ impl AppWidget {
     }
 }
 
-impl Widget for &AppWidget {
+impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let vertical = Layout::vertical([
             Constraint::Length(1),
