@@ -3,23 +3,26 @@ use std::{
     fmt::Display,
     io,
     time::{Duration, Instant},
+    vec,
 };
 
 use chrono::{Datelike, Duration as CDuration, Utc, Weekday};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use itertools::Itertools;
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Padding, Paragraph, Tabs},
+    widgets::{Block, Borders, Padding, Paragraph, Row, Table, TableState, Tabs},
 };
 use strum::{EnumIter, FromRepr, IntoEnumIterator as _};
 use tokio::sync::mpsc;
 
-use crate::{menu::Menu, tui, Mensa};
+use crate::{menu::Menu, tui, Dish, Mensa};
 
 #[derive(Debug, Default)]
 pub struct App {
     exit: bool,
     selected_tab: SelectedTab,
+    selected_item: usize,
     menus: HashMap<SelectedTab, Menu>,
 }
 
@@ -88,10 +91,27 @@ impl App {
 
     pub fn next_tab(&mut self) {
         self.selected_tab = self.selected_tab.next();
+        self.selected_item = 0;
     }
 
     pub fn prev_tab(&mut self) {
         self.selected_tab = self.selected_tab.previous();
+        self.selected_item = 0;
+    }
+
+    pub fn next_item(&mut self) {
+        let amount = self
+            .menus
+            .get(&self.selected_tab)
+            .map(|m| m.get_main_dishes().len() + m.get_side_dishes().len() + m.get_desserts().len())
+            .unwrap_or_default();
+        if self.selected_item + 1 < amount {
+            self.selected_item += 1;
+        }
+    }
+
+    pub fn prev_item(&mut self) {
+        self.selected_item = self.selected_item.saturating_sub(1);
     }
 
     fn handle_events(&mut self, timeout: Duration) -> io::Result<()> {
@@ -109,8 +129,10 @@ impl App {
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
-            KeyCode::Left => self.prev_tab(),
-            KeyCode::Right => self.next_tab(),
+            KeyCode::Left | KeyCode::Char('h') => self.prev_tab(),
+            KeyCode::Right | KeyCode::Char('l') => self.next_tab(),
+            KeyCode::Up | KeyCode::Char('k') => self.prev_item(),
+            KeyCode::Down | KeyCode::Char('j') => self.next_item(),
             _ => {}
         }
     }
@@ -161,17 +183,66 @@ impl App {
 
         outer_block.render(area, buf);
 
-        let details_block = Block::default().title("Details").borders(Borders::ALL);
+        let details_block = Block::default()
+            .title("Details")
+            .borders(Borders::ALL)
+            .padding(Padding::proportional(1));
+        let details_inner = details_block.inner(details);
+        details_block.render(details, buf);
 
-        Paragraph::new(format!("Hello, World {}!", tab as i64))
-            .block(details_block)
-            .render(details, buf);
+        if let Some(dish) = self.menus.get(&self.selected_tab).and_then(|m| {
+            m.get_main_dishes()
+                .iter()
+                .chain(m.get_side_dishes())
+                .chain(m.get_desserts())
+                .nth(self.selected_item)
+        }) {
+            dish.render(details_inner, buf);
+        } else {
+            Paragraph::new("Kein Gericht ausgewählt").render(details_inner, buf);
+        }
 
-        let text = format!("{:?}", self.menus.get(&tab));
+        let overview_block = Block::default()
+            .title("Overview")
+            .padding(Padding::proportional(1))
+            .borders(Borders::ALL);
+        let overview_inner = overview_block.inner(overview);
+        overview_block.render(overview, buf);
 
-        Paragraph::new(text)
-            .block(Block::default().title("Overview").borders(Borders::ALL))
-            .render(overview, buf);
+        if let Some(menu) = self.menus.get(&tab) {
+            self.render_menu(menu, overview_inner, buf);
+        } else {
+            Paragraph::new("Loading...").render(overview_inner, buf);
+        }
+    }
+
+    fn render_menu(&self, menu: &Menu, area: Rect, buf: &mut Buffer) {
+        // TODO: correctly implement
+        let main_dishes = menu.get_main_dishes();
+        let side_dishes = menu.get_side_dishes();
+        let desserts = menu.get_desserts();
+
+        if main_dishes.is_empty() {
+            Paragraph::new("Die Mensa hat geschlossen").render(area, buf);
+        } else {
+            let mut state = TableState::default().with_selected(self.selected_item);
+            StatefulWidget::render(
+                Table::new(
+                    main_dishes
+                        .iter()
+                        .chain(side_dishes)
+                        .chain(desserts)
+                        .map(Row::from),
+                    vec![Constraint::Fill(1), Constraint::Length(6)],
+                )
+                .header(Row::new(vec!["Gericht", "Mensen"]))
+                .highlight_style(Style::new().blue().on_dark_gray())
+                .highlight_symbol("> "),
+                area,
+                buf,
+                &mut state,
+            );
+        }
     }
 }
 
@@ -198,7 +269,7 @@ fn render_title(area: Rect, buf: &mut Buffer) {
 }
 
 fn render_footer(area: Rect, buf: &mut Buffer) {
-    Line::raw("◄ ► to change tab | Press q to quit")
+    Line::raw("▲▼ to change item | ◄ ► to change tab | Press q to quit")
         .centered()
         .render(area, buf);
 }
@@ -231,5 +302,37 @@ fn get_day_display(offset: i64) -> &'static str {
                 Weekday::Sun => "Sonntag",
             }
         }
+    }
+}
+
+impl Widget for &Dish {
+    fn render(self, area: Rect, buf: &mut Buffer)
+    where
+        Self: Sized,
+    {
+        let table = Table::new(
+            vec![
+                Row::new(vec!["Studenten:", self.get_price_students().unwrap_or("-")]),
+                Row::new(vec![
+                    "Mitarbeiter:",
+                    self.get_price_employees().unwrap_or("-"),
+                ]),
+                Row::new(vec!["Gäste:", self.get_price_guests().unwrap_or("-")]),
+            ],
+            vec![Constraint::Min(12), Constraint::Min(6)],
+        );
+
+        Widget::render(table, area, buf);
+    }
+}
+impl<'a> From<&'a Dish> for Row<'a> {
+    fn from(value: &'a Dish) -> Self {
+        let mensen_display = value
+            .get_mensen()
+            .iter()
+            .sorted()
+            .map(Mensa::get_char)
+            .join("");
+        Row::new(vec![value.get_name().to_string(), mensen_display])
     }
 }

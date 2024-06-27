@@ -14,7 +14,6 @@ path = "src/main.rs"
 chrono = "0.4.31"
 clap = { version = "4.4.6", features = ["derive"] }
 color-eyre = "0.6.3"
-comfy-table = "7.1.1"
 const_format = "0.2.32"
 crossterm = { version = "0.27.0", features = ["event-stream"] }
 futures = "0.3.28"
