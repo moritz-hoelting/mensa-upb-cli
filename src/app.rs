@@ -11,7 +11,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use itertools::Itertools;
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Padding, Paragraph, Row, Table, TableState, Tabs},
+    widgets::{Block, Borders, Padding, Paragraph, Row, Table, TableState, Tabs, Wrap},
 };
 use strum::{EnumIter, FromRepr, IntoEnumIterator as _};
 use tokio::sync::mpsc;
@@ -310,7 +310,19 @@ impl Widget for &Dish {
     where
         Self: Sized,
     {
-        let table = Table::new(
+        let [name_area, prices_area, mensen_area] = Layout::vertical([
+            Constraint::Length(3),
+            Constraint::Fill(1),
+            Constraint::Fill(1),
+        ])
+        .areas(area);
+
+        Paragraph::new(self.get_name())
+            .centered()
+            .wrap(Wrap::default())
+            .render(name_area, buf);
+
+        let prices_table = Table::new(
             vec![
                 Row::new(vec!["Studenten:", self.get_price_students().unwrap_or("-")]),
                 Row::new(vec![
@@ -320,9 +332,18 @@ impl Widget for &Dish {
                 Row::new(vec!["Gäste:", self.get_price_guests().unwrap_or("-")]),
             ],
             vec![Constraint::Min(12), Constraint::Min(6)],
-        );
+        )
+        .header(Row::new(vec!["", "Preis:"]));
 
-        Widget::render(table, area, buf);
+        Widget::render(prices_table, prices_area, buf);
+
+        Layout::vertical(self.get_mensen().iter().map(|_| Constraint::Length(1)))
+            .split(mensen_area)
+            .into_iter()
+            .zip(self.get_mensen().iter().map(Mensa::to_string).sorted())
+            .for_each(|(area, mensa)| {
+                Paragraph::new(mensa).render(*area, buf);
+            });
     }
 }
 impl<'a> From<&'a Dish> for Row<'a> {
@@ -332,6 +353,7 @@ impl<'a> From<&'a Dish> for Row<'a> {
             .iter()
             .sorted()
             .map(Mensa::get_char)
+            .sorted()
             .join("");
         Row::new(vec![value.get_name().to_string(), mensen_display])
     }

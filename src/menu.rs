@@ -40,6 +40,12 @@ impl Menu {
             }
         }
 
+        let compare_name = |a: &Dish, b: &Dish| a.get_name().cmp(b.get_name());
+
+        main_dishes.sort_by(compare_name);
+        side_dishes.sort_by(compare_name);
+        desserts.sort_by(compare_name);
+
         Ok(Self {
             main_dishes,
             side_dishes,
