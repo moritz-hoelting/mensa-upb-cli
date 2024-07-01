@@ -213,7 +213,7 @@ impl App {
         }
 
         let overview_block = Block::default()
-            .title("Overview")
+            .title("Übersicht")
             .padding(Padding::proportional(1))
             .borders(Borders::ALL);
         let overview_inner = overview_block.inner(overview);
@@ -222,7 +222,7 @@ impl App {
         if let Some(menu) = self.menus.get(&tab) {
             self.render_menu(menu, overview_inner, buf);
         } else {
-            Paragraph::new("Loading...").render(overview_inner, buf);
+            Paragraph::new("Laden...").render(overview_inner, buf);
         }
     }
 
@@ -325,7 +325,7 @@ fn render_title(area: Rect, buf: &mut Buffer) {
 }
 
 fn render_footer(area: Rect, buf: &mut Buffer) {
-    Line::raw("▲▼ to change item | ◄ ► to change tab | Press q to quit")
+    Line::raw("▲ ▼ um zwischen Gerichten zu wechseln | ◄ ► um zwischen Tagen zu wechseln | Drücke q um zu beenden")
         .centered()
         .render(area, buf);
 }
