@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fmt::Display,
+    fmt::{Debug, Display},
     io,
     time::{Duration, Instant},
     vec,
@@ -8,25 +8,35 @@ use std::{
 
 use chrono::{Datelike, Duration as CDuration, Utc, Weekday};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use image::DynamicImage;
 use itertools::Itertools;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Padding, Paragraph, Row, Table, TableState, Tabs, Wrap},
 };
-use ratatui_image::StatefulImage;
+use ratatui_image::{protocol::StatefulProtocol, StatefulImage};
 use strum::{EnumIter, FromRepr, IntoEnumIterator as _};
 use tokio::sync::mpsc;
 
 use crate::{menu::Menu, tui, Dish, Mensa};
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct App {
     exit: bool,
     selected_tab: SelectedTab,
     selected_item: usize,
     menus: HashMap<SelectedTab, Menu>,
-    imgs: HashMap<String, DynamicImage>,
+    imgs: HashMap<String, Box<dyn StatefulProtocol>>,
+}
+
+impl Debug for App {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("App")
+            .field("exit", &self.exit)
+            .field("selected_tab", &self.selected_tab)
+            .field("selected_item", &self.selected_item)
+            .field("menus", &self.menus)
+            .finish()
+    }
 }
 
 #[derive(Default, Clone, Copy, Debug, FromRepr, EnumIter, PartialEq, Eq, Hash)]
@@ -52,6 +62,9 @@ impl App {
     pub async fn run(&mut self, terminal: &mut tui::Tui) -> io::Result<()> {
         let (tx_menu, mut rx_menu) = mpsc::channel(10);
         let (tx_img, mut rx_img) = mpsc::channel(50);
+
+        let mut picker = ratatui_image::picker::Picker::new((8, 12));
+        picker.guess_protocol();
 
         for tab in SelectedTab::iter() {
             let tx_menu = tx_menu.clone();
@@ -89,6 +102,7 @@ impl App {
                 self.menus.insert(tab, menu);
             }
             while let Ok((name, img)) = rx_img.try_recv() {
+                let img = picker.new_resize_protocol(img.clone());
                 self.imgs.insert(name, img);
             }
         }
@@ -269,10 +283,7 @@ impl App {
             .render(name_area, buf);
 
         if let Some(img) = self.imgs.get(dish.get_name()) {
-            let mut picker = ratatui_image::picker::Picker::new((8, 12));
-            picker.guess_protocol();
-
-            let mut img = picker.new_resize_protocol(img.clone());
+            let mut img = img.clone();
             let widget = StatefulImage::new(None);
             StatefulWidget::render(widget, image_area, buf, &mut img);
         }
