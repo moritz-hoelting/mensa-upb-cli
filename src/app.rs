@@ -8,11 +8,13 @@ use std::{
 
 use chrono::{Datelike, Duration as CDuration, Utc, Weekday};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use image::DynamicImage;
 use itertools::Itertools;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Padding, Paragraph, Row, Table, TableState, Tabs, Wrap},
 };
+use ratatui_image::StatefulImage;
 use strum::{EnumIter, FromRepr, IntoEnumIterator as _};
 use tokio::sync::mpsc;
 
@@ -24,6 +26,7 @@ pub struct App {
     selected_tab: SelectedTab,
     selected_item: usize,
     menus: HashMap<SelectedTab, Menu>,
+    imgs: HashMap<String, DynamicImage>,
 }
 
 #[derive(Default, Clone, Copy, Debug, FromRepr, EnumIter, PartialEq, Eq, Hash)]
@@ -47,18 +50,22 @@ impl Display for SelectedTab {
 impl App {
     /// runs the application's main loop until the user quits
     pub async fn run(&mut self, terminal: &mut tui::Tui) -> io::Result<()> {
-        let (tx, mut rx) = mpsc::channel(10);
+        let (tx_menu, mut rx_menu) = mpsc::channel(10);
+        let (tx_img, mut rx_img) = mpsc::channel(50);
 
         for tab in SelectedTab::iter() {
-            let tx = tx.clone();
+            let tx_menu = tx_menu.clone();
+            let tx_img = tx_img.clone();
+
             tokio::spawn(async move {
                 let menu = Menu::new(
                     (Utc::now() + CDuration::days(tab as i64)).date_naive(),
                     &[Mensa::Academica, Mensa::Forum],
+                    tx_img,
                 )
                 .await
                 .unwrap();
-                tx.send((tab, menu)).await.unwrap();
+                tx_menu.send((tab, menu)).await.unwrap();
             });
         }
 
@@ -78,8 +85,11 @@ impl App {
                 last_tick = Instant::now();
             }
 
-            while let Ok((tab, menu)) = rx.try_recv() {
+            while let Ok((tab, menu)) = rx_menu.try_recv() {
                 self.menus.insert(tab, menu);
+            }
+            while let Ok((name, img)) = rx_img.try_recv() {
+                self.imgs.insert(name, img);
             }
         }
         Ok(())
@@ -197,7 +207,7 @@ impl App {
                 .chain(m.get_desserts())
                 .nth(self.selected_item)
         }) {
-            dish.render(details_inner, buf);
+            self.render_dish(dish, details_inner, buf);
         } else {
             Paragraph::new("Kein Gericht ausgewählt").render(details_inner, buf);
         }
@@ -217,7 +227,6 @@ impl App {
     }
 
     fn render_menu(&self, menu: &Menu, area: Rect, buf: &mut Buffer) {
-        // TODO: correctly implement
         let main_dishes = menu.get_main_dishes();
         let side_dishes = menu.get_side_dishes();
         let desserts = menu.get_desserts();
@@ -243,6 +252,53 @@ impl App {
                 &mut state,
             );
         }
+    }
+
+    fn render_dish(&self, dish: &Dish, area: Rect, buf: &mut Buffer) {
+        let [name_area, image_area, prices_area, mensen_area] = Layout::vertical([
+            Constraint::Length(3),
+            Constraint::Fill(1),
+            Constraint::Fill(1),
+            Constraint::Fill(1),
+        ])
+        .areas(area);
+
+        Paragraph::new(dish.get_name())
+            .centered()
+            .wrap(Wrap::default())
+            .render(name_area, buf);
+
+        if let Some(img) = self.imgs.get(dish.get_name()) {
+            let mut picker = ratatui_image::picker::Picker::new((8, 12));
+            picker.guess_protocol();
+
+            let mut img = picker.new_resize_protocol(img.clone());
+            let widget = StatefulImage::new(None);
+            StatefulWidget::render(widget, image_area, buf, &mut img);
+        }
+
+        let prices_table = Table::new(
+            vec![
+                Row::new(vec!["Studenten:", dish.get_price_students().unwrap_or("-")]),
+                Row::new(vec![
+                    "Mitarbeiter:",
+                    dish.get_price_employees().unwrap_or("-"),
+                ]),
+                Row::new(vec!["Gäste:", dish.get_price_guests().unwrap_or("-")]),
+            ],
+            vec![Constraint::Min(12), Constraint::Min(6)],
+        )
+        .header(Row::new(vec!["", "Preis:"]));
+
+        Widget::render(prices_table, prices_area, buf);
+
+        Layout::vertical(dish.get_mensen().iter().map(|_| Constraint::Length(1)))
+            .split(mensen_area)
+            .iter()
+            .zip(dish.get_mensen().iter().map(Mensa::to_string).sorted())
+            .for_each(|(area, mensa)| {
+                Paragraph::new(mensa).render(*area, buf);
+            });
     }
 }
 
@@ -305,47 +361,6 @@ fn get_day_display(offset: i64) -> &'static str {
     }
 }
 
-impl Widget for &Dish {
-    fn render(self, area: Rect, buf: &mut Buffer)
-    where
-        Self: Sized,
-    {
-        let [name_area, prices_area, mensen_area] = Layout::vertical([
-            Constraint::Length(3),
-            Constraint::Fill(1),
-            Constraint::Fill(1),
-        ])
-        .areas(area);
-
-        Paragraph::new(self.get_name())
-            .centered()
-            .wrap(Wrap::default())
-            .render(name_area, buf);
-
-        let prices_table = Table::new(
-            vec![
-                Row::new(vec!["Studenten:", self.get_price_students().unwrap_or("-")]),
-                Row::new(vec![
-                    "Mitarbeiter:",
-                    self.get_price_employees().unwrap_or("-"),
-                ]),
-                Row::new(vec!["Gäste:", self.get_price_guests().unwrap_or("-")]),
-            ],
-            vec![Constraint::Min(12), Constraint::Min(6)],
-        )
-        .header(Row::new(vec!["", "Preis:"]));
-
-        Widget::render(prices_table, prices_area, buf);
-
-        Layout::vertical(self.get_mensen().iter().map(|_| Constraint::Length(1)))
-            .split(mensen_area)
-            .into_iter()
-            .zip(self.get_mensen().iter().map(Mensa::to_string).sorted())
-            .for_each(|(area, mensa)| {
-                Paragraph::new(mensa).render(*area, buf);
-            });
-    }
-}
 impl<'a> From<&'a Dish> for Row<'a> {
     fn from(value: &'a Dish) -> Self {
         let mensen_display = value

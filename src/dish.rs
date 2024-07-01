@@ -1,12 +1,15 @@
+use std::io::Cursor;
+
+use image::DynamicImage;
 use itertools::Itertools;
 use scraper::ElementRef;
+use tokio::sync::mpsc;
 
 use crate::Mensa;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dish {
     name: String,
-    img_src: String,
     price_students: Option<String>,
     price_employees: Option<String>,
     price_guests: Option<String>,
@@ -51,7 +54,11 @@ impl Dish {
 }
 
 impl Dish {
-    pub fn from_element(element: ElementRef, mensa: Mensa) -> Option<Self> {
+    pub fn from_element(
+        element: ElementRef,
+        tx: mpsc::Sender<(String, DynamicImage)>,
+        mensa: Mensa,
+    ) -> Option<Self> {
         let html_name_selector = scraper::Selector::parse(".desc h4").unwrap();
         let name = element
             .select(&html_name_selector)
@@ -65,6 +72,21 @@ impl Dish {
         let img_selector = scraper::Selector::parse(".img img").unwrap();
         let img_src_path = element.select(&img_selector).next()?.value().attr("src")?;
         let img_src = format!("https://www.studierendenwerk-pb.de/{}", img_src_path);
+
+        let name_clone = name.clone();
+        tokio::spawn(async move {
+            if let Ok(img) = reqwest::get(img_src).await {
+                if let Ok(img_bytes) = img.bytes().await {
+                    if let Some(dyn_img) = image::io::Reader::new(Cursor::new(img_bytes))
+                        .with_guessed_format()
+                        .ok()
+                        .and_then(|r| r.decode().ok())
+                    {
+                        let _ = tx.send((name_clone, dyn_img)).await;
+                    }
+                }
+            }
+        });
 
         let html_price_selector = scraper::Selector::parse(".desc .price").unwrap();
         let mut prices = element
@@ -97,7 +119,6 @@ impl Dish {
 
         Some(Self {
             name,
-            img_src,
             price_students: prices
                 .iter_mut()
                 .find(|(price_for, _)| price_for == "Studierende")

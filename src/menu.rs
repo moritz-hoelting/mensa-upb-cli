@@ -1,4 +1,6 @@
 use chrono::NaiveDate;
+use image::DynamicImage;
+use tokio::sync::mpsc;
 
 use crate::{Dish, Mensa};
 
@@ -10,13 +12,17 @@ pub struct Menu {
 }
 
 impl Menu {
-    pub async fn new(day: NaiveDate, mensen: &[Mensa]) -> Result<Self, reqwest::Error> {
+    pub async fn new(
+        day: NaiveDate,
+        mensen: &[Mensa],
+        tx: mpsc::Sender<(String, DynamicImage)>,
+    ) -> Result<Self, reqwest::Error> {
         let mut main_dishes = Vec::new();
         let mut side_dishes = Vec::new();
         let mut desserts = Vec::new();
 
         for mensa in mensen.iter().copied() {
-            let (main, side, des) = scrape_menu(mensa, day).await?;
+            let (main, side, des) = scrape_menu(mensa, day, tx.clone()).await?;
             for dish in main {
                 if let Some(existing) = main_dishes.iter_mut().find(|d| dish.same_as(d)) {
                     existing.merge(dish);
@@ -69,6 +75,7 @@ impl Menu {
 async fn scrape_menu(
     mensa: Mensa,
     day: NaiveDate,
+    tx: mpsc::Sender<(String, DynamicImage)>,
 ) -> Result<(Vec<Dish>, Vec<Dish>, Vec<Dish>), reqwest::Error> {
     let url = mensa.get_url();
     let client = reqwest::Client::new();
@@ -86,7 +93,7 @@ async fn scrape_menu(
     .unwrap();
     let html_main_dishes = document.select(&html_main_dishes_selector);
     let main_dishes = html_main_dishes
-        .filter_map(|dish| Dish::from_element(dish, mensa))
+        .filter_map(|dish| Dish::from_element(dish, tx.clone(), mensa))
         .collect::<Vec<_>>();
 
     let html_side_dishes_selector = scraper::Selector::parse(
@@ -95,7 +102,7 @@ async fn scrape_menu(
     .unwrap();
     let html_side_dishes = document.select(&html_side_dishes_selector);
     let side_dishes = html_side_dishes
-        .filter_map(|dish| Dish::from_element(dish, mensa))
+        .filter_map(|dish| Dish::from_element(dish, tx.clone(), mensa))
         .collect::<Vec<_>>();
 
     let html_desserts_selector = scraper::Selector::parse(
@@ -104,7 +111,7 @@ async fn scrape_menu(
     .unwrap();
     let html_desserts = document.select(&html_desserts_selector);
     let desserts = html_desserts
-        .filter_map(|dish| Dish::from_element(dish, mensa))
+        .filter_map(|dish| Dish::from_element(dish, tx.clone(), mensa))
         .collect::<Vec<_>>();
 
     Ok((main_dishes, side_dishes, desserts))
