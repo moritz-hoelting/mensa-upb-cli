@@ -1,6 +1,6 @@
 use scraper::ElementRef;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Dish {
     name: String,
     price_students: Option<String>,

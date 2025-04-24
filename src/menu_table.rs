@@ -143,7 +143,7 @@ fn into_row(
     row
 }
 
-fn get_dishes<'a, F>(
+pub fn get_dishes<'a, F>(
     menu: &'a [DailyMenu],
     get: F,
     extras: &[String],
