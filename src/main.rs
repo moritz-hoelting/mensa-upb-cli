@@ -1,6 +1,6 @@
 use chrono::{Days, Utc};
 use clap::Parser;
-use mensa_upb_cli::{cli_args::PriceLevel, menu_table, util::all_menus, Mensa};
+use mensa_upb_cli::{cli_args::PriceLevel, generate_json, menu_table, util::all_menus, Mensa};
 
 #[tokio::main]
 async fn main() {
@@ -13,8 +13,17 @@ async fn main() {
                 .map(|days_ahead| (Utc::now() + Days::new(days_ahead)).date_naive()),
         )
         .await;
-        let table = menu_table(&menu, cli.price_level, mensen.len() > 1, cli.extras);
-        println!("{}", table);
+
+        match cli.format {
+            OutputFormat::Table => {
+                let table = menu_table(&menu, cli.price_level, mensen.len() > 1, cli.extras);
+                println!("{}", table);
+            },
+            OutputFormat::Json => {
+                let output = generate_json(&menu, cli.extras);
+                println!("{output}");
+            }
+        }
     }
 }
 
@@ -33,4 +42,14 @@ struct Cli {
     /// Nach Extras filtern
     #[arg(short, long)]
     extras: Vec<String>,
+
+    #[arg(short, long, value_enum, default_value_t = OutputFormat::Table)]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]
+enum OutputFormat {
+    #[default]
+    Table,
+    Json,
 }

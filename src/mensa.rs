@@ -4,7 +4,7 @@ use const_format::concatcp;
 
 use crate::{DailyMenu, Dish};
 
-#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum, serde::Serialize)]
 pub enum Mensa {
     Forum,
     Academica,
