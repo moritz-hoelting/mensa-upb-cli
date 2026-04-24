@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use chrono::NaiveDate;
 use clap::ValueEnum;
 use const_format::concatcp;
@@ -38,9 +40,9 @@ impl Mensa {
     }
 }
 
-impl ToString for Mensa {
-    fn to_string(&self) -> String {
-        match self {
+impl Display for Mensa {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
             Self::Forum => "Forum",
             Self::Academica => "Academica",
             Self::Picknick => "Picknick",
@@ -49,8 +51,7 @@ impl ToString for Mensa {
             Self::ZM2 => "ZM2",
             Self::Basilica => "Basilica",
             Self::Atrium => "Atrium",
-        }
-        .to_string()
+        })
     }
 }
 

@@ -157,7 +157,7 @@ where
             get(m).iter().map(move |d| (mensa, d)).collect::<Vec<_>>()
         })
         .sorted_by_key(|(_, dish)| dish.get_name())
-        .group_by(|(_, dish)| *dish)
+        .chunk_by(|(_, dish)| *dish)
         .into_iter()
         .map(|(dish, g)| {
             (
