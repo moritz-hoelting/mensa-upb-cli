@@ -1,6 +1,11 @@
 use chrono::{Days, Utc};
 use clap::Parser;
-use mensa_upb_cli::{cli_args::PriceLevel, generate_json, menu_table, util::all_menus, Canteen};
+use mensa_upb_cli::{
+    cli_args::{Filter, PriceLevel},
+    generate_json, menu_table,
+    util::all_menus,
+    Canteen,
+};
 
 #[tokio::main]
 async fn main() {
@@ -11,10 +16,11 @@ async fn main() {
             &mensen,
             cli.days_ahead
                 .map(|days_ahead| (Utc::now() + Days::new(days_ahead)).date_naive()),
+            &cli.filter,
         )
         .await;
 
-        match cli.format {
+        match cli.output_format {
             OutputFormat::Table => {
                 let table = menu_table(&menu, cli.price_level, mensen.len() > 1);
                 println!("{}", table);
@@ -39,9 +45,12 @@ struct Cli {
     /// Nächsten Tage anzeigen
     #[arg(short, long)]
     days_ahead: Option<u64>,
+    /// Nur Gerichte anzeigen, die vegan oder vegetarisch sind
+    #[arg(short, long)]
+    filter: Vec<Filter>,
 
     #[arg(short, long, value_enum, default_value_t = OutputFormat::Table)]
-    format: OutputFormat,
+    output_format: OutputFormat,
 }
 
 #[derive(Debug, Clone, Copy, Default, clap::ValueEnum)]

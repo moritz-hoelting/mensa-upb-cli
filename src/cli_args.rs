@@ -6,3 +6,9 @@ pub enum PriceLevel {
     Bediensteter,
     Gast,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, clap::ValueEnum)]
+pub enum Filter {
+    Vegan,
+    Vegetarian,
+}

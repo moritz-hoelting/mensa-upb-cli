@@ -2,10 +2,14 @@ use chrono::NaiveDate;
 use futures::future::join_all;
 use rust_decimal::Decimal;
 
-use crate::{Canteen, DailyMenu};
+use crate::{cli_args::Filter, Canteen, DailyMenu};
 
-pub async fn all_menus(canteens: &[Canteen], day: Option<NaiveDate>) -> Vec<DailyMenu> {
-    join_all(canteens.iter().map(|m| m.get_menu(day)))
+pub async fn all_menus(
+    canteens: &[Canteen],
+    day: Option<NaiveDate>,
+    filters: &[Filter],
+) -> Vec<DailyMenu> {
+    join_all(canteens.iter().map(|m| m.get_menu(day, filters)))
         .await
         .into_iter()
         .filter_map(|menu| menu.ok())

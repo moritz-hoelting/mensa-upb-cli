@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use chrono::NaiveDate;
 use itertools::Itertools;
 
-use crate::{dish::DishType, Canteen, Dish};
+use crate::{cli_args::Filter, dish::DishType, Canteen, Dish};
 
 const API_URL: &str = "https://stwpb.de/wp-json/stwk-pb/v1/meals";
 
@@ -22,6 +22,7 @@ impl DailyMenu {
         start_date: &NaiveDate,
         end_date: &NaiveDate,
         canteen: Canteen,
+        filters: &[Filter],
     ) -> Result<Self, reqwest::Error> {
         let scraped = scrape_menu(start_date, end_date, canteen).await?;
 
@@ -32,7 +33,21 @@ impl DailyMenu {
 
         let mut dishes = chunked
             .into_iter()
-            .map(|c| (c.0, c.1.collect()))
+            .map(|c| {
+                (
+                    c.0,
+                    c.1.filter(|el| {
+                        if filters.contains(&Filter::Vegan) {
+                            el.is_vegan()
+                        } else if filters.contains(&Filter::Vegetarian) {
+                            el.is_vegetarian()
+                        } else {
+                            true
+                        }
+                    })
+                    .collect(),
+                )
+            })
             .collect::<BTreeMap<_, Vec<_>>>();
 
         let main_dishes =

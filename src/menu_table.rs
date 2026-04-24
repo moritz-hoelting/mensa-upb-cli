@@ -197,11 +197,5 @@ where
                 dish,
             )
         })
-        // .filter(|(_, dish)| {
-        //     extras.is_empty()
-        //         || extras
-        //             .iter()
-        //             .all(|extra| dish.get_extras().iter().any(|e| e.contains(extra)))
-        // })
         .collect::<Vec<_>>()
 }

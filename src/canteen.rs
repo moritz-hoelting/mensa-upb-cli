@@ -3,7 +3,7 @@ use std::fmt::Display;
 use chrono::NaiveDate;
 use clap::ValueEnum;
 
-use crate::DailyMenu;
+use crate::{cli_args::Filter, DailyMenu};
 
 #[derive(Debug, Clone, Copy, PartialEq, ValueEnum, serde::Serialize)]
 pub enum Canteen {
@@ -16,9 +16,13 @@ pub enum Canteen {
 }
 
 impl Canteen {
-    pub async fn get_menu(&self, day: Option<NaiveDate>) -> Result<DailyMenu, reqwest::Error> {
+    pub async fn get_menu(
+        &self,
+        day: Option<NaiveDate>,
+        filters: &[Filter],
+    ) -> Result<DailyMenu, reqwest::Error> {
         let date = day.unwrap_or_else(|| chrono::Local::now().naive_local().date());
-        DailyMenu::scrape(&date, &date, *self).await
+        DailyMenu::scrape(&date, &date, *self, filters).await
     }
 
     pub fn get_venue_id(&self) -> &'static str {
