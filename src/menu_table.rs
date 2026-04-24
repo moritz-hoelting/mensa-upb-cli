@@ -1,17 +1,14 @@
 use comfy_table::{Cell, CellAlignment, Row, Table};
 use itertools::Itertools;
 
-use crate::{cli_args::PriceLevel, DailyMenu, Dish, Mensa};
+use crate::{cli_args::PriceLevel, Canteen, DailyMenu, Dish};
 
-pub fn menu_table(
-    menu: &[DailyMenu],
-    price_level: Option<PriceLevel>,
-    show_mensa: bool,
-    extras: Vec<String>,
-) -> Table {
-    let main_dishes = get_dishes(menu, DailyMenu::get_main_dishes, &extras);
-    let side_dishes = get_dishes(menu, DailyMenu::get_side_dishes, &extras);
-    let desserts = get_dishes(menu, DailyMenu::get_desserts, &extras);
+pub fn menu_table(menu: &[DailyMenu], price_level: Option<PriceLevel>, show_mensa: bool) -> Table {
+    let main_dishes = get_dishes(menu, DailyMenu::get_main_dishes);
+    let side_dishes = get_dishes(menu, DailyMenu::get_side_dishes);
+    let soups = get_dishes(menu, DailyMenu::get_soups);
+    let desserts = get_dishes(menu, DailyMenu::get_desserts);
+    let other_dishes = get_dishes(menu, DailyMenu::get_other_dishes);
 
     let mut col_span = if price_level.is_some() { 3 } else { 5 };
     if show_mensa {
@@ -78,6 +75,26 @@ pub fn menu_table(
         table.add_row(into_row(dish.1, &dish.0, price_level, show_mensa));
     }
     {
+        let mut soups_row = Row::new();
+        soups_row.add_cell(
+            Cell::from("Suppen")
+                .set_alignment(CellAlignment::Center)
+                .add_attribute(comfy_table::Attribute::Underlined)
+                .add_attribute(comfy_table::Attribute::OverLined),
+        );
+        for _ in 0..col_span - 1 {
+            soups_row.add_cell(
+                Cell::new("")
+                    .add_attribute(comfy_table::Attribute::Underlined)
+                    .add_attribute(comfy_table::Attribute::OverLined),
+            );
+        }
+        table.add_row(soups_row);
+    }
+    for dish in soups {
+        table.add_row(into_row(dish.1, &dish.0, price_level, show_mensa));
+    }
+    {
         let mut desserts_row = Row::new();
         desserts_row.add_cell(
             Cell::from("Desserts")
@@ -97,13 +114,32 @@ pub fn menu_table(
     for dish in desserts {
         table.add_row(into_row(dish.1, &dish.0, price_level, show_mensa));
     }
-
+    {
+        let mut other_dishes_row = Row::new();
+        other_dishes_row.add_cell(
+            Cell::from("Andere Gerichte")
+                .set_alignment(CellAlignment::Center)
+                .add_attribute(comfy_table::Attribute::Underlined)
+                .add_attribute(comfy_table::Attribute::OverLined),
+        );
+        for _ in 0..col_span - 1 {
+            other_dishes_row.add_cell(
+                Cell::new("")
+                    .add_attribute(comfy_table::Attribute::Underlined)
+                    .add_attribute(comfy_table::Attribute::OverLined),
+            );
+        }
+        table.add_row(other_dishes_row);
+    }
+    for dish in other_dishes {
+        table.add_row(into_row(dish.1, &dish.0, price_level, show_mensa));
+    }
     table
 }
 
 fn into_row(
     dish: &Dish,
-    mensa: &[&Mensa],
+    mensa: &[&Canteen],
     price_level: Option<PriceLevel>,
     show_mensa: bool,
 ) -> Row {
@@ -112,25 +148,16 @@ fn into_row(
 
     if let Some(price_level) = price_level {
         let price = match price_level {
-            PriceLevel::Student => dish.get_price_students().unwrap_or("-"),
-            PriceLevel::Bediensteter => dish.get_price_employees().unwrap_or("-"),
-            PriceLevel::Gast => dish.get_price_guests().unwrap_or("-"),
+            PriceLevel::Student => dish.get_price_students(),
+            PriceLevel::Bediensteter => dish.get_price_employees(),
+            PriceLevel::Gast => dish.get_price_guests(),
         }
         .to_string();
         row.add_cell(Cell::from(price).set_alignment(CellAlignment::Right));
     } else {
-        row.add_cell(
-            Cell::from(dish.get_price_students().unwrap_or_default())
-                .set_alignment(CellAlignment::Right),
-        )
-        .add_cell(
-            Cell::from(dish.get_price_employees().unwrap_or_default())
-                .set_alignment(CellAlignment::Right),
-        )
-        .add_cell(
-            Cell::from(dish.get_price_guests().unwrap_or_default())
-                .set_alignment(CellAlignment::Right),
-        );
+        row.add_cell(Cell::from(dish.get_price_students()).set_alignment(CellAlignment::Right))
+            .add_cell(Cell::from(dish.get_price_employees()).set_alignment(CellAlignment::Right))
+            .add_cell(Cell::from(dish.get_price_guests()).set_alignment(CellAlignment::Right));
     }
     if show_mensa {
         row.add_cell(
@@ -138,22 +165,27 @@ fn into_row(
                 .set_alignment(CellAlignment::Right),
         );
     }
-    row.add_cell(Cell::from(dish.get_extras().join(", ")).set_alignment(CellAlignment::Right));
+    row.add_cell(
+        Cell::from(if dish.is_vegan() {
+            "vegan"
+        } else if dish.is_vegetarian() {
+            "vegetarian"
+        } else {
+            ""
+        })
+        .set_alignment(CellAlignment::Right),
+    );
 
     row
 }
 
-pub fn get_dishes<'a, F>(
-    menu: &'a [DailyMenu],
-    get: F,
-    extras: &[String],
-) -> Vec<(Vec<&'a Mensa>, &'a Dish)>
+pub fn get_dishes<F>(menu: &[DailyMenu], get: F) -> Vec<(Vec<&Canteen>, &Dish)>
 where
     F: Fn(&DailyMenu) -> &[Dish],
 {
     menu.iter()
         .flat_map(|m| {
-            let mensa = m.get_mensa();
+            let mensa = m.get_canteen();
             get(m).iter().map(move |d| (mensa, d)).collect::<Vec<_>>()
         })
         .sorted_by_key(|(_, dish)| dish.get_name())
@@ -165,11 +197,11 @@ where
                 dish,
             )
         })
-        .filter(|(_, dish)| {
-            extras.is_empty()
-                || extras
-                    .iter()
-                    .all(|extra| dish.get_extras().iter().any(|e| e.contains(extra)))
-        })
+        // .filter(|(_, dish)| {
+        //     extras.is_empty()
+        //         || extras
+        //             .iter()
+        //             .all(|extra| dish.get_extras().iter().any(|e| e.contains(extra)))
+        // })
         .collect::<Vec<_>>()
 }
